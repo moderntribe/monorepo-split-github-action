@@ -28,10 +28,10 @@ $hostRepositoryOrganizationName = $config->getGitRepository();
 
 // info
 $clonedRepository='https://' . $hostRepositoryOrganizationName;
-$cloningMessage = sprintf('Cloning "%s" repository to "%s" directory', $clonedRepository, $cloneDirectory);
+$cloningMessage = sprintf('Cloning "%s" repository to "%s" directory using branch "%s"', $clonedRepository, $cloneDirectory, $config->getBranch());
 note($cloningMessage);
 
-$commandLine = 'git clone -- https://' . $config->getAccessToken() . '@' . $hostRepositoryOrganizationName . ' ' . $cloneDirectory;
+$commandLine = 'git clone -b' . $config->getBranch() . ' -- https://' . $config->getAccessToken() . '@' . $hostRepositoryOrganizationName . ' ' . $cloneDirectory;
 exec_with_note($commandLine);
 
 
