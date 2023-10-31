@@ -31,6 +31,9 @@ inputs:
     user_name:
         description: 'Git User Name'
         required: true
+    commit_hash:
+        description: '[Optional] Commit hash to use as the code to deploy'
+        required: false
 
 runs:
     using: 'docker'
@@ -45,6 +48,7 @@ runs:
         - ${{ inputs.tag }}
         - ${{ inputs.user_email }}
         - ${{ inputs.user_name }}
+        - ${{ inputs.commit_hash }}
 
 branding:
     icon: maximize-2
