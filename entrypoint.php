@@ -75,10 +75,10 @@ exec('rm -rf ' . $cloneDirectory);
 
 // copy the package directory including all hidden files to the clone dir
 // make sure the source dir ends with `/.` so that all contents are copied (including .github etc)
-$copyMessage = sprintf('Copying contents to git repo of "%s" branch', $config->getCommitHash());
+$copyMessage = sprintf('Copying contents to git repo of "%s" branch from "%s" to "%s"', $config->getCommitHash(), $config->getPackageDirectory() . '/.', $buildDirectory);
 note($copyMessage);
-$commandLine = sprintf('cp -ra %s %s', $config->getPackageDirectory() . '/.', $buildDirectory);
-exec($commandLine);
+$commandLine = sprintf('cp -rav %s %s', $config->getPackageDirectory() . '/.', $buildDirectory);
+exec_with_output_print($commandLine);
 
 note('Files that will be pushed');
 list_directory_files($buildDirectory);
