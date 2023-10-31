@@ -108,4 +108,26 @@ jobs:
                     # ↓ the user signed under the split commit
                     user_name: "kaizen-ci"
                     user_email: "info@kaizen-ci.org"
+
+            # with custom commit hash
+            -
+                if: "startsWith(github.ref, 'refs/tags/')"
+                uses: "symplify/monorepo-split-github-action@2.1"
+                with:
+                    tag: ${GITHUB_REF#refs/tags/}
+                    commit_hash: ${GITHUB_REF#refs/tags/} # or any other means to get the commit hash
+
+                    # ↓ split "packages/easy-coding-standard" directory
+                    package_directory: 'packages/${{ matrix.package.local_path }}'
+
+                    # ↓ into https://github.com/symplify/easy-coding-standard repository
+                    repository_organization: 'symplify'
+                    repository_name: '${{ matrix.package.split_repository }}'
+
+                    # [optional, with "github.com" as default]
+                    repository_host: git.private.com:1234
+
+                    # ↓ the user signed under the split commit
+                    user_name: "kaizen-ci"
+                    user_email: "info@kaizen-ci.org"
 ```
