@@ -65,7 +65,7 @@ final class ConfigFactory
             userName: $env[$envPrefix . 'USER_NAME'] ?? null,
             userEmail: $env[$envPrefix . 'USER_EMAIL'] ?? null,
             // required
-            commitHash: $commitHash,
+            commitHash: $env[$envPrefix . 'COMMIT_HASH'] ?? $commitHash,
             accessToken: $accessToken
         );
     }
