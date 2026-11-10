@@ -24,35 +24,23 @@ final class PublicAccessTokenResolver
     private const GITLAB_TOKEN = 'GITLAB_TOKEN';
 
     /**
-     * @var string[]
-     */
-    private const POSSIBLE_TOKEN_ENVS = [
-        self::PAT,
-        self::GITLAB_TOKEN,
-        self::GITHUB_TOKEN,
-    ];
-
-    /**
      * @param array<string, string> $env
      */
     public function resolve(array $env): string
     {
-        if (isset($env[self::PAT])) {
-            return $env[self::PAT];
+        // An unavailable secret resolves to an empty string, so treat empty values as missing.
+        foreach ([self::PAT, self::GITHUB_TOKEN] as $name) {
+            if (($env[$name] ?? '') !== '') {
+                return $env[$name];
+            }
         }
 
-        if (isset($env[self::GITHUB_TOKEN])) {
-            return $env[self::GITHUB_TOKEN];
-        }
-
-        if (isset($env[self::GITLAB_TOKEN])) {
+        if (($env[self::GITLAB_TOKEN] ?? '') !== '') {
             return 'oauth2:' . $env[self::GITLAB_TOKEN];
         }
 
-        $message = sprintf(
-            'Public access token is missing, add it via: "%s"',
-            implode('", "', self::POSSIBLE_TOKEN_ENVS)
-        );
+        $message = 'Access token is missing or empty. Set PAT (or GITHUB_TOKEN) or GITLAB_TOKEN in the env of this step. '
+            . 'Secrets are not available to workflows triggered from forks.';
 
         throw new ConfigurationException($message);
     }

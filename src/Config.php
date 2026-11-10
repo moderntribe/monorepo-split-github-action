@@ -37,7 +37,7 @@ final class Config
         return $this->userEmail;
     }
 
-    public function getBranch(): ?string
+    public function getBranch(): string
     {
         return $this->branch;
     }
