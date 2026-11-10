@@ -22,6 +22,7 @@ exec('git config --system --add safe.directory /github/workspace');
 exec('git config --system --add safe.directory /tmp/monorepo_split/build_directory');
 
 setupGitCredentials($config);
+setupGitAuthentication($config);
 
 
 $cloneDirectory = sys_get_temp_dir() . '/monorepo_split/clone_directory';
@@ -34,7 +35,9 @@ $clonedRepository = 'https://' . $hostRepositoryOrganizationName;
 $cloningMessage = sprintf('Cloning "%s" repository to "%s" directory', $clonedRepository, $cloneDirectory);
 note($cloningMessage);
 
-$commandLine = 'git clone -- https://' . $config->getAccessToken() . '@' . $hostRepositoryOrganizationName . ' ' . $cloneDirectory;
+// The access token is supplied through setupGitAuthentication(), never in the URL, so it cannot
+// leak into logs, `.git/config`, or git's own error output.
+$commandLine = 'git clone -- ' . escapeshellarg($clonedRepository) . ' ' . escapeshellarg($cloneDirectory);
 exec_with_note($commandLine);
 
 $baseDir = getcwd();
@@ -199,4 +202,25 @@ function setupGitCredentials(Config $config): void
     if ($config->getUserEmail()) {
         execOrDie('git config --global user.email ' . escapeshellarg($config->getUserEmail()));
     }
+}
+
+
+/**
+ * Authenticate git over HTTPS with an Authorization header instead of embedding the token in the remote URL.
+ *
+ * The header is passed through GIT_CONFIG_* environment variables (git >= 2.31), which every git
+ * subprocess inherits. It is never written to disk or placed on a command line, and git redacts it in traces.
+ */
+function setupGitAuthentication(Config $config): void
+{
+    $accessToken = $config->getAccessToken();
+
+    // GitLab tokens already arrive as "oauth2:<token>". GitHub accepts any username with a token as the password.
+    $credentials = str_contains($accessToken, ':') ? $accessToken : 'x-access-token:' . $accessToken;
+
+    $index = (int) (getenv('GIT_CONFIG_COUNT') ?: 0);
+
+    putenv(sprintf('GIT_CONFIG_KEY_%d=http.https://%s/.extraheader', $index, $config->getRepositoryHost()));
+    putenv(sprintf('GIT_CONFIG_VALUE_%d=AUTHORIZATION: basic %s', $index, base64_encode($credentials)));
+    putenv(sprintf('GIT_CONFIG_COUNT=%d', $index + 1));
 }

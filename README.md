@@ -25,10 +25,14 @@ Split is basically git push or local directory to remote git repository. This re
 
 ```yaml
 env:
-    GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+    PAT: ${{ secrets.ACCESS_TOKEN }}
     # or
     GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
 ```
+
+Set the token in the `env` of the split steps only, not at workflow or job level. Workflow-level `env` exposes the token to every step in every job, including third-party actions and dependency install scripts. Prefer `PAT` over `GITHUB_TOKEN` so it is not confused with the token GitHub provides automatically.
+
+The action authenticates git with an HTTP `Authorization` header passed through `GIT_CONFIG_*` environment variables. The token is never embedded in a clone URL, printed to the log, or written to `.git/config`.
 
 Make sure to add this access token in "Secrets" of package settings at https://github.com/<organization>/<package>/settings/environments
 
@@ -45,13 +49,6 @@ on:
             - main
         tags:
             - '*'
-
-env:
-    # 1. for Github split
-    GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-
-    # 2. for Gitlab split
-    GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
 
 jobs:
     packages_split:
@@ -73,6 +70,12 @@ jobs:
             -
                 if: "!startsWith(github.ref, 'refs/tags/')"
                 uses: danharrin/monorepo-split-github-action@v2.4.0
+                env:
+                    # 1. for Github split
+                    PAT: ${{ secrets.ACCESS_TOKEN }}
+
+                    # 2. for Gitlab split
+                    GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
                 with:
                     # ↓ split "packages/easy-coding-standard" directory
                     package_directory: 'packages/${{ matrix.package.local_path }}'
@@ -92,6 +95,12 @@ jobs:
             -
                 if: "startsWith(github.ref, 'refs/tags/')"
                 uses: danharrin/monorepo-split-github-action@v2.4.0
+                env:
+                    # 1. for Github split
+                    PAT: ${{ secrets.ACCESS_TOKEN }}
+
+                    # 2. for Gitlab split
+                    GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
                 with:
                     tag: ${GITHUB_REF#refs/tags/}
 
@@ -113,6 +122,12 @@ jobs:
             -
                 if: "startsWith(github.ref, 'refs/tags/')"
                 uses: "symplify/monorepo-split-github-action@2.1"
+                env:
+                    # 1. for Github split
+                    PAT: ${{ secrets.ACCESS_TOKEN }}
+
+                    # 2. for Gitlab split
+                    GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
                 with:
                     tag: ${GITHUB_REF#refs/tags/}
                     commit_hash: ${GITHUB_REF#refs/tags/} # or any other means to get the commit hash
