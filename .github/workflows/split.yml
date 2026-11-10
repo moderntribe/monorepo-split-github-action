@@ -1,0 +1,47 @@
+name: split-test
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  split-test:
+    runs-on: ubuntu-latest
+
+    # The split test pushes to a real repository and needs ACCESS_TOKEN. It is unavailable to pull requests
+    # from forks and to forks of this repository, and the action fails without a token, so skip it there.
+    env:
+      HAS_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN != '' }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.HAS_ACCESS_TOKEN == 'true'
+        with:
+          persist-credentials: false
+
+      # run action.yaml in the root directory
+      # see https://github.community/t/self-reference-an-action-for-testing/17891
+      - uses: "$/"
+        if: env.HAS_ACCESS_TOKEN == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          package_directory: 'tests/packages/some-package'
+          repository_organization: 'symplify'
+          repository_name: 'monorepo-split-github-action-test'
+
+          user_name: 'kaizen-ci'
+          user_email: 'info@kaizen-ci.org'

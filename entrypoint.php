@@ -175,10 +175,11 @@ function list_directory_files(string $directory): void
 
 /********************* helper functions *********************/
 
+/** @phpstan-ignore-next-line */
 function execOrDie(string $command, ?array &$output = []): string|false
 {
     $result = exec($command, $output, $errorCode);
-    if (0 === $errorCode) {
+    if ($errorCode === 0) {
         return $result;
     }
 
