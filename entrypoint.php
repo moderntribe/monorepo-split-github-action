@@ -15,7 +15,7 @@ try {
     $config = $configFactory->create(getenv());
 } catch (ConfigurationException $configurationException) {
     error($configurationException->getMessage());
-    exit(0);
+    exit(1);
 }
 
 exec('git config --system --add safe.directory /github/workspace');
@@ -49,16 +49,21 @@ exec_with_output_print('git fetch');
 
 note(sprintf('Trying to checkout %s branch', $config->getBranch()));
 
-// if the given branch doesn't exist it returns empty string
-$branchSwitchedSuccessfully = execOrDie(sprintf('git checkout %s', escapeshellarg($config->getBranch()))) !== '';
+// The clone fetched every remote branch, so check for the target branch locally.
+exec(sprintf('git rev-parse --verify --quiet %s', escapeshellarg('refs/remotes/origin/' . $config->getBranch())), $unusedOutput, $branchExitCode);
 
-// if the branch doesn't exist we creat it and push to origin
-// otherwise we just checkout to the given branch
-if (!$branchSwitchedSuccessfully) {
+if ($branchExitCode === 0) {
+    exec_with_output_print(sprintf('git checkout %s', escapeshellarg($config->getBranch())));
+} else {
     note(sprintf('Creating branch "%s" as it doesn\'t exist', $config->getBranch()));
 
     exec_with_output_print(sprintf('git checkout -b %s', escapeshellarg($config->getBranch())));
-    exec_with_output_print(sprintf('git push --quiet origin %s', escapeshellarg($config->getBranch())));
+
+    // An empty repository has no commit to push yet; the split commit below creates the branch remotely.
+    exec('git rev-parse --verify --quiet HEAD', $unusedOutput, $headExitCode);
+    if ($headExitCode === 0) {
+        exec_with_output_print(sprintf('git push --quiet origin %s', escapeshellarg($config->getBranch())));
+    }
 }
 
 chdir($baseDir);

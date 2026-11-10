@@ -37,15 +37,14 @@ final class PublicAccessTokenResolver
      */
     public function resolve(array $env): string
     {
-        if (isset($env[self::PAT])) {
-            return $env[self::PAT];
+        // An unavailable secret resolves to an empty string, so treat empty values as missing.
+        foreach ([self::PAT, self::GITHUB_TOKEN] as $name) {
+            if (($env[$name] ?? '') !== '') {
+                return $env[$name];
+            }
         }
 
-        if (isset($env[self::GITHUB_TOKEN])) {
-            return $env[self::GITHUB_TOKEN];
-        }
-
-        if (isset($env[self::GITLAB_TOKEN])) {
+        if (($env[self::GITLAB_TOKEN] ?? '') !== '') {
             return 'oauth2:' . $env[self::GITLAB_TOKEN];
         }
 
