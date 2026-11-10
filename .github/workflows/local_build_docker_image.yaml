@@ -17,5 +17,9 @@ jobs:
             -   name: Build image
                 run: docker build . -t splitter
 
-            -   name: Test Docker image
-                run: docker run splitter
+            -   name: Test Docker image fails without configuration
+                run: |
+                    if docker run splitter; then
+                        echo "Expected the splitter to fail without configuration."
+                        exit 1
+                    fi

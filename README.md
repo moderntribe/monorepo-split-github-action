@@ -24,13 +24,18 @@ Try it yourself - send PR with change in [that directory](/tests/packages/some-p
 Split is basically git push or local directory to remote git repository. This remote repository can be located on GitHub or Gitlab. To be able to do that, it needs a token with write repository access, provided as `PAT` (or `GITHUB_TOKEN`) for GitHub or `GITLAB_TOKEN` for GitLab:
 
 ```yaml
-env:
-    PAT: ${{ secrets.ACCESS_TOKEN }}
-    # or
-    GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+steps:
+    -
+        uses: moderntribe/monorepo-split-github-action@<version>
+        env:
+            PAT: ${{ secrets.ACCESS_TOKEN }}
+            # or
+            GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
 ```
 
 Set the token in the `env` of the split steps only, not at workflow or job level. Workflow-level `env` exposes the token to every step in every job, including third-party actions and dependency install scripts. Prefer `PAT` over `GITHUB_TOKEN` so it is not confused with the token GitHub provides automatically.
+
+Inputs are passed to git as literal values; they are not shell-expanded. Use GitHub expressions such as `${{ github.ref_name }}` and `${{ github.sha }}` rather than shell variables like `$GITHUB_REF`. For backward compatibility, the exact forms `${GITHUB_REF#refs/tags/}` and `${GITHUB_REF#refs/heads/}` are still resolved; any other `$` in `branch`, `tag` or `commit_hash` fails the step.
 
 The action authenticates git with an HTTP `Authorization` header passed through `GIT_CONFIG_*` environment variables. The token is never embedded in a clone URL, printed to the log, or written to `.git/config`.
 
@@ -130,7 +135,7 @@ jobs:
                     GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
                 with:
                     tag: ${{ github.ref_name }}
-                    commit_hash: ${GITHUB_REF#refs/tags/} # or any other means to get the commit hash
+                    commit_hash: ${{ github.sha }} # or any other means to get the commit hash
 
                     # ↓ split "packages/easy-coding-standard" directory
                     package_directory: 'packages/${{ matrix.package.local_path }}'

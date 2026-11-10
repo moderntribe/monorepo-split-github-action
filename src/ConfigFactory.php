@@ -52,22 +52,36 @@ final class ConfigFactory
     {
         $envPrefix = $ciPlatform === self::GITHUB ? 'INPUT_' : '';
 
+        $required = function (string $name, string $label) use ($env, $envPrefix): string {
+            return $this->input($env, $envPrefix . $name) ?? throw new ConfigurationException($label . ' is missing');
+        };
+
         return new Config(
-            packageDirectory: $env[$envPrefix . 'PACKAGE_DIRECTORY'] ?? throw new ConfigurationException('Package directory is missing'),
-            repositoryHost: $env[$envPrefix . 'REPOSITORY_HOST'] ?? throw new ConfigurationException('Repository host is missing'),
-            repositoryOrganization: $env[$envPrefix . 'REPOSITORY_ORGANIZATION'] ?? throw new ConfigurationException(
-                'Repository organization is missing'
-            ),
-            repositoryName: $env[$envPrefix . 'REPOSITORY_NAME'] ?? throw new ConfigurationException('Repository name is missing'),
+            packageDirectory: $required('PACKAGE_DIRECTORY', 'Package directory'),
+            repositoryHost: $required('REPOSITORY_HOST', 'Repository host'),
+            repositoryOrganization: $required('REPOSITORY_ORGANIZATION', 'Repository organization'),
+            repositoryName: $required('REPOSITORY_NAME', 'Repository name'),
             // optional
-            branch: $env[$envPrefix . 'BRANCH'] ?? null,
-            tag: $this->resolveGitHubRefShorthand($env, $env[$envPrefix . 'TAG'] ?? null),
-            userName: $env[$envPrefix . 'USER_NAME'] ?? null,
-            userEmail: $env[$envPrefix . 'USER_EMAIL'] ?? null,
+            branch: $this->resolveGitHubRefShorthand($env, $this->input($env, $envPrefix . 'BRANCH')) ?? 'main',
+            tag: $this->resolveGitHubRefShorthand($env, $this->input($env, $envPrefix . 'TAG')),
+            userName: $this->input($env, $envPrefix . 'USER_NAME'),
+            userEmail: $this->input($env, $envPrefix . 'USER_EMAIL'),
             // required
-            commitHash: $this->resolveGitHubRefShorthand($env, $env[$envPrefix . 'COMMIT_HASH'] ?? null) ?? $commitHash,
+            commitHash: $this->resolveGitHubRefShorthand($env, $this->input($env, $envPrefix . 'COMMIT_HASH')) ?? $commitHash,
             accessToken: $accessToken
         );
+    }
+
+    /**
+     * GitHub sets every declared input, using an empty string when it was not provided, so treat empty as missing.
+     *
+     * @param array<string, mixed> $env
+     */
+    private function input(array $env, string $name): ?string
+    {
+        $value = $env[$name] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**
@@ -79,17 +93,26 @@ final class ConfigFactory
     }
 
     /**
-     * Earlier README examples passed `${GITHUB_REF#refs/tags/}` as an input, which only worked because inputs
-     * were interpolated into shell commands unescaped. Inputs are now escaped, so resolve that exact form here.
+     * Earlier README examples and common workflows passed `${GITHUB_REF#refs/tags/}` or `${GITHUB_REF#refs/heads/}`
+     * as inputs, which only worked because inputs were interpolated into shell commands unescaped. Inputs are now
+     * escaped, so resolve those exact forms here. Any other unexpanded `$` form is rejected by the entrypoint.
      *
      * @param array<string, mixed> $env
      */
     private function resolveGitHubRefShorthand(array $env, ?string $value): ?string
     {
-        if ($value !== '${GITHUB_REF#refs/tags/}') {
+        $prefixes = [
+            '${GITHUB_REF#refs/tags/}' => 'refs/tags/',
+            '${GITHUB_REF#refs/heads/}' => 'refs/heads/',
+        ];
+
+        if ($value === null || ! isset($prefixes[$value])) {
             return $value;
         }
 
-        return preg_replace('#^refs/tags/#', '', (string) ($env['GITHUB_REF'] ?? ''));
+        $ref = (string) ($env['GITHUB_REF'] ?? '');
+        $prefix = $prefixes[$value];
+
+        return str_starts_with($ref, $prefix) ? substr($ref, strlen($prefix)) : $ref;
     }
 }

@@ -53,7 +53,8 @@ note(sprintf('Trying to checkout %s branch', $config->getBranch()));
 exec(sprintf('git rev-parse --verify --quiet %s', escapeshellarg('refs/remotes/origin/' . $config->getBranch())), $unusedOutput, $branchExitCode);
 
 if ($branchExitCode === 0) {
-    exec_with_output_print(sprintf('git checkout %s', escapeshellarg($config->getBranch())));
+    // Explicit start point and "--" so a same-named tag or top-level path can't be picked instead of the branch.
+    exec_with_output_print(sprintf('git checkout -B %1$s %2$s --', escapeshellarg($config->getBranch()), escapeshellarg('refs/remotes/origin/' . $config->getBranch())));
 } else {
     note(sprintf('Creating branch "%s" as it doesn\'t exist', $config->getBranch()));
 
@@ -62,7 +63,7 @@ if ($branchExitCode === 0) {
     // An empty repository has no commit to push yet; the split commit below creates the branch remotely.
     exec('git rev-parse --verify --quiet HEAD', $unusedOutput, $headExitCode);
     if ($headExitCode === 0) {
-        exec_with_output_print(sprintf('git push --quiet origin %s', escapeshellarg($config->getBranch())));
+        exec_with_output_print('git push --quiet origin ' . escapeshellarg('HEAD:refs/heads/' . $config->getBranch()));
     }
 }
 
@@ -122,7 +123,7 @@ if ($changedFiles) {
     note($message);
 
     execOrDie('git commit --message ' . escapeshellarg($commitMessage));
-    execOrDie('git push --quiet origin ' . escapeshellarg($config->getBranch()));
+    execOrDie('git push --quiet origin ' . escapeshellarg('HEAD:refs/heads/' . $config->getBranch()));
 } else {
     note('No files to change');
 }
@@ -136,7 +137,7 @@ if ($config->getTag()) {
     $commandLine = sprintf('git tag %s -m %s', escapeshellarg($config->getTag()), escapeshellarg($message));
     exec_with_note($commandLine);
 
-    exec_with_note('git push --quiet origin ' . escapeshellarg($config->getTag()));
+    exec_with_note('git push --quiet origin ' . escapeshellarg('refs/tags/' . $config->getTag() . ':refs/tags/' . $config->getTag()));
 }
 
 
@@ -227,7 +228,8 @@ function setupGitAuthentication(Config $config): void
 
     $accessToken = $config->getAccessToken();
 
-    // GitLab tokens already arrive as "oauth2:<token>". GitHub accepts any username with a token as the password.
+    // Tokens containing ":" are used as "user:password" as-is: GitLab tokens arrive as "oauth2:<token>", and a
+    // user-supplied "user:token" keeps working as it did in the URL. GitHub accepts any username with a token.
     $credentials = str_contains($accessToken, ':') ? $accessToken : 'x-access-token:' . $accessToken;
 
     $index = (int) (getenv('GIT_CONFIG_COUNT') ?: 0);
@@ -239,35 +241,52 @@ function setupGitAuthentication(Config $config): void
 
 
 /**
- * Inputs are interpolated into git commands. They are shell-escaped everywhere, and refs and the commit
- * hash are validated here so a value starting with "-" cannot be read as a git option.
+ * Inputs are interpolated into git commands. They are shell-escaped everywhere; branch, tag, commit hash and
+ * package directory are also validated here so they can't be read as git options or unexpanded shell variables.
  */
 function validateInputs(Config $config): void
 {
-    $checks = [
-        'branch' => [$config->getBranch(), 'git check-ref-format --branch %s', ''],
-        'tag' => [$config->getTag(), 'git check-ref-format %s', 'refs/tags/'],
+    $fail = static function (string $message): void {
+        error($message);
+        exit(1);
+    };
+
+    $values = [
+        'branch' => $config->getBranch(),
+        'tag' => $config->getTag(),
+        'commit_hash' => $config->getCommitHash(),
     ];
 
-    foreach ($checks as $input => [$name, $command, $refPrefix]) {
-        if ($name === null || $name === '') {
-            continue;
+    foreach ($values as $input => $value) {
+        if ($value !== null && str_contains($value, '$')) {
+            $fail(sprintf(
+                'Input "%s" contains an unexpanded shell variable: "%s". Inputs are no longer shell-expanded; '
+                . 'use a GitHub expression such as ${{ github.ref_name }} or ${{ github.sha }} instead.',
+                $input,
+                $value
+            ));
         }
+    }
 
-        exec(sprintf($command, escapeshellarg($refPrefix . $name)) . ' 2>/dev/null', $output, $exitCode);
-        if ($exitCode !== 0 || str_starts_with($name, '-')) {
-            error(sprintf('Invalid %s name "%s"', $input, $name));
-            exit(1);
+    $branch = $config->getBranch();
+    exec(sprintf('git check-ref-format --branch %s 2>/dev/null', escapeshellarg($branch)), $unusedOutput, $exitCode);
+    if ($exitCode !== 0 || str_starts_with($branch, '-') || str_starts_with($branch, 'refs/') || $branch === '@') {
+        $fail(sprintf('Invalid branch name "%s"', $branch));
+    }
+
+    $tag = $config->getTag();
+    if ($tag !== null) {
+        exec(sprintf('git check-ref-format %s 2>/dev/null', escapeshellarg('refs/tags/' . $tag)), $unusedOutput, $exitCode);
+        if ($exitCode !== 0 || str_starts_with($tag, '-') || str_starts_with($tag, 'refs/')) {
+            $fail(sprintf('Invalid tag name "%s"', $tag));
         }
     }
 
     if (str_starts_with($config->getCommitHash(), '-')) {
-        error(sprintf('Invalid commit hash "%s"', $config->getCommitHash()));
-        exit(1);
+        $fail(sprintf('Invalid commit hash "%s"', $config->getCommitHash()));
     }
 
     if (str_starts_with($config->getPackageDirectory(), '-')) {
-        error(sprintf('Invalid package directory "%s"', $config->getPackageDirectory()));
-        exit(1);
+        $fail(sprintf('Invalid package directory "%s"', $config->getPackageDirectory()));
     }
 }
