@@ -209,10 +209,16 @@ function setupGitCredentials(Config $config): void
  * Authenticate git over HTTPS with an Authorization header instead of embedding the token in the remote URL.
  *
  * The header is passed through GIT_CONFIG_* environment variables (git >= 2.31), which every git
- * subprocess inherits. It is never written to disk or placed on a command line, and git redacts it in traces.
+ * subprocess inherits. It is never written to disk or placed on a command line, and it is scoped to the
+ * target repository URL. Git redacts it in GIT_TRACE_CURL output; the trace settings that would print it
+ * anyway are cleared below.
  */
 function setupGitAuthentication(Config $config): void
 {
+    foreach (['GIT_TRACE_REDACT', 'GIT_TRACE2_CONFIG_PARAMS', 'GIT_TRACE2_ENV_VARS'] as $variable) {
+        putenv($variable);
+    }
+
     $accessToken = $config->getAccessToken();
 
     // GitLab tokens already arrive as "oauth2:<token>". GitHub accepts any username with a token as the password.
@@ -220,7 +226,7 @@ function setupGitAuthentication(Config $config): void
 
     $index = (int) (getenv('GIT_CONFIG_COUNT') ?: 0);
 
-    putenv(sprintf('GIT_CONFIG_KEY_%d=http.https://%s/.extraheader', $index, $config->getRepositoryHost()));
+    putenv(sprintf('GIT_CONFIG_KEY_%d=http.https://%s.extraheader', $index, $config->getGitRepository()));
     putenv(sprintf('GIT_CONFIG_VALUE_%d=AUTHORIZATION: basic %s', $index, base64_encode($credentials)));
     putenv(sprintf('GIT_CONFIG_COUNT=%d', $index + 1));
 }

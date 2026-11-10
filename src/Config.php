@@ -57,11 +57,6 @@ final class Config
         return $this->accessToken;
     }
 
-    public function getRepositoryHost(): string
-    {
-        return $this->repositoryHost;
-    }
-
     public function getGitRepository(): string
     {
         return $this->repositoryHost . '/' . $this->repositoryOrganization . '/' . $this->repositoryName . '.git';

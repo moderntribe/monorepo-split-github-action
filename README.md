@@ -21,7 +21,7 @@ Try it yourself - send PR with change in [that directory](/tests/packages/some-p
 
 ## Config
 
-Split is basically git push or local directory to remote git repository. This remote repository can be located on GitHub or Gitlab. To be able to do that, it needs `GITHUB_TOKEN` or `GITLAB_TOKEN` with write repository access:
+Split is basically git push or local directory to remote git repository. This remote repository can be located on GitHub or Gitlab. To be able to do that, it needs a token with write repository access, provided as `PAT` (or `GITHUB_TOKEN`) for GitHub or `GITLAB_TOKEN` for GitLab:
 
 ```yaml
 env:
