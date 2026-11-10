@@ -102,7 +102,7 @@ jobs:
                     # 2. for Gitlab split
                     GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
                 with:
-                    tag: ${GITHUB_REF#refs/tags/}
+                    tag: ${{ github.ref_name }}
 
                     # ↓ split "packages/easy-coding-standard" directory
                     package_directory: 'packages/${{ matrix.package.local_path }}'
@@ -129,7 +129,7 @@ jobs:
                     # 2. for Gitlab split
                     GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
                 with:
-                    tag: ${GITHUB_REF#refs/tags/}
+                    tag: ${{ github.ref_name }}
                     commit_hash: ${GITHUB_REF#refs/tags/} # or any other means to get the commit hash
 
                     # ↓ split "packages/easy-coding-standard" directory

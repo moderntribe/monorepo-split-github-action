@@ -21,6 +21,7 @@ try {
 exec('git config --system --add safe.directory /github/workspace');
 exec('git config --system --add safe.directory /tmp/monorepo_split/build_directory');
 
+validateInputs($config);
 setupGitCredentials($config);
 setupGitAuthentication($config);
 
@@ -49,15 +50,15 @@ exec_with_output_print('git fetch');
 note(sprintf('Trying to checkout %s branch', $config->getBranch()));
 
 // if the given branch doesn't exist it returns empty string
-$branchSwitchedSuccessfully = execOrDie(sprintf('git checkout %s', $config->getBranch())) !== '';
+$branchSwitchedSuccessfully = execOrDie(sprintf('git checkout %s', escapeshellarg($config->getBranch()))) !== '';
 
 // if the branch doesn't exist we creat it and push to origin
 // otherwise we just checkout to the given branch
 if (!$branchSwitchedSuccessfully) {
     note(sprintf('Creating branch "%s" as it doesn\'t exist', $config->getBranch()));
 
-    exec_with_output_print(sprintf('git checkout -b %s', $config->getBranch()));
-    exec_with_output_print(sprintf('git push --quiet origin %s', $config->getBranch()));
+    exec_with_output_print(sprintf('git checkout -b %s', escapeshellarg($config->getBranch())));
+    exec_with_output_print(sprintf('git push --quiet origin %s', escapeshellarg($config->getBranch())));
 }
 
 chdir($baseDir);
@@ -66,11 +67,11 @@ note('Cleaning destination repository of old files');
 // We're only interested in the .git directory, move it to $TARGET_DIR and use it from now on
 mkdir($buildDirectory . '/.git', 0777, true);
 
-execOrDie(sprintf('cp -r %s %s', $cloneDirectory . '/.git', $buildDirectory));
+execOrDie(sprintf('cp -r %s %s', escapeshellarg($cloneDirectory . '/.git'), escapeshellarg($buildDirectory)));
 
 
 // cleanup old unused data to avoid pushing them
-execOrDie('rm -rf ' . $cloneDirectory);
+execOrDie('rm -rf ' . escapeshellarg($cloneDirectory));
 // exec('rm -rf .git');
 
 
@@ -78,7 +79,7 @@ execOrDie('rm -rf ' . $cloneDirectory);
 // make sure the source dir ends with `/.` so that all contents are copied (including .github etc)
 $copyMessage = sprintf('Copying contents to git repo of "%s" branch from "%s" to "%s"', $config->getCommitHash(), $config->getPackageDirectory() . '/.', $buildDirectory);
 note($copyMessage);
-$commandLine = sprintf('cp -rav %s %s', $config->getPackageDirectory() . '/.', $buildDirectory);
+$commandLine = sprintf('cp -rav -- %s %s', escapeshellarg($config->getPackageDirectory() . '/.'), escapeshellarg($buildDirectory));
 exec_with_output_print($commandLine);
 
 note('Files that will be pushed');
@@ -116,7 +117,7 @@ if ($changedFiles) {
     note($message);
 
     execOrDie('git commit --message ' . escapeshellarg($commitMessage));
-    execOrDie('git push --quiet origin ' . $config->getBranch());
+    execOrDie('git push --quiet origin ' . escapeshellarg($config->getBranch()));
 } else {
     note('No files to change');
 }
@@ -127,10 +128,10 @@ if ($config->getTag()) {
     $message = sprintf('Publishing "%s"', $config->getTag());
     note($message);
 
-    $commandLine = sprintf('git tag %s -m "%s"', $config->getTag(), $message);
+    $commandLine = sprintf('git tag %s -m %s', escapeshellarg($config->getTag()), escapeshellarg($message));
     exec_with_note($commandLine);
 
-    exec_with_note('git push --quiet origin ' . $config->getTag());
+    exec_with_note('git push --quiet origin ' . escapeshellarg($config->getTag()));
 }
 
 
@@ -142,7 +143,7 @@ note($chdirMessage);
 
 function createCommitMessage(string $commitSha): string
 {
-    execOrDie("git show -s --format=%B {$commitSha}", $outputLines);
+    execOrDie('git show -s --format=%B ' . escapeshellarg($commitSha) . ' --', $outputLines);
     return $outputLines[0] ?? '';
 }
 
@@ -162,7 +163,7 @@ function error(string $message): void
 
 function list_directory_files(string $directory): void
 {
-    exec_with_output_print('ls -la ' . $directory);
+    exec_with_output_print('ls -la ' . escapeshellarg($directory));
 }
 
 
@@ -196,7 +197,7 @@ function exec_with_output_print(string $commandLine): void
 function setupGitCredentials(Config $config): void
 {
     if ($config->getUserName()) {
-        execOrDie('git config --global user.name ' . $config->getUserName());
+        execOrDie('git config --global user.name ' . escapeshellarg($config->getUserName()));
     }
 
     if ($config->getUserEmail()) {
@@ -229,4 +230,39 @@ function setupGitAuthentication(Config $config): void
     putenv(sprintf('GIT_CONFIG_KEY_%d=http.https://%s.extraheader', $index, $config->getGitRepository()));
     putenv(sprintf('GIT_CONFIG_VALUE_%d=AUTHORIZATION: basic %s', $index, base64_encode($credentials)));
     putenv(sprintf('GIT_CONFIG_COUNT=%d', $index + 1));
+}
+
+
+/**
+ * Inputs are interpolated into git commands. They are shell-escaped everywhere, and refs and the commit
+ * hash are validated here so a value starting with "-" cannot be read as a git option.
+ */
+function validateInputs(Config $config): void
+{
+    $checks = [
+        'branch' => [$config->getBranch(), 'git check-ref-format --branch %s', ''],
+        'tag' => [$config->getTag(), 'git check-ref-format %s', 'refs/tags/'],
+    ];
+
+    foreach ($checks as $input => [$name, $command, $refPrefix]) {
+        if ($name === null || $name === '') {
+            continue;
+        }
+
+        exec(sprintf($command, escapeshellarg($refPrefix . $name)) . ' 2>/dev/null', $output, $exitCode);
+        if ($exitCode !== 0 || str_starts_with($name, '-')) {
+            error(sprintf('Invalid %s name "%s"', $input, $name));
+            exit(1);
+        }
+    }
+
+    if (str_starts_with($config->getCommitHash(), '-')) {
+        error(sprintf('Invalid commit hash "%s"', $config->getCommitHash()));
+        exit(1);
+    }
+
+    if (str_starts_with($config->getPackageDirectory(), '-')) {
+        error(sprintf('Invalid package directory "%s"', $config->getPackageDirectory()));
+        exit(1);
+    }
 }

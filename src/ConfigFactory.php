@@ -61,11 +61,11 @@ final class ConfigFactory
             repositoryName: $env[$envPrefix . 'REPOSITORY_NAME'] ?? throw new ConfigurationException('Repository name is missing'),
             // optional
             branch: $env[$envPrefix . 'BRANCH'] ?? null,
-            tag: $env[$envPrefix . 'TAG'] ?? null,
+            tag: $this->resolveGitHubRefShorthand($env, $env[$envPrefix . 'TAG'] ?? null),
             userName: $env[$envPrefix . 'USER_NAME'] ?? null,
             userEmail: $env[$envPrefix . 'USER_EMAIL'] ?? null,
             // required
-            commitHash: $env[$envPrefix . 'COMMIT_HASH'] ?? $commitHash,
+            commitHash: $this->resolveGitHubRefShorthand($env, $env[$envPrefix . 'COMMIT_HASH'] ?? null) ?? $commitHash,
             accessToken: $accessToken
         );
     }
@@ -76,5 +76,20 @@ final class ConfigFactory
     private function resolveCommitHash(string $ciPlatform, array $env): string
     {
         return $ciPlatform === self::GITLAB ? $env['CI_COMMIT_SHA'] : $env['GITHUB_SHA'];
+    }
+
+    /**
+     * Earlier README examples passed `${GITHUB_REF#refs/tags/}` as an input, which only worked because inputs
+     * were interpolated into shell commands unescaped. Inputs are now escaped, so resolve that exact form here.
+     *
+     * @param array<string, mixed> $env
+     */
+    private function resolveGitHubRefShorthand(array $env, ?string $value): ?string
+    {
+        if ($value !== '${GITHUB_REF#refs/tags/}') {
+            return $value;
+        }
+
+        return preg_replace('#^refs/tags/#', '', (string) ($env['GITHUB_REF'] ?? ''));
     }
 }
